@@ -9,6 +9,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'user-search') {
 }
 $logs = [];
 $total = 0;
+$total_sp = 0;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
@@ -31,31 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $data = getWorklogs($from, $to, $userAccountIds);
         $logs = $data['logs'];
         $total = $data['total'];
-
-        if ($action === 'export' && !empty($logs)) {
-
-            header('Content-Type: text/csv');
-            header('Content-Disposition: attachment; filename="jira_worklogs.csv"');
-
-            $output = fopen('php://output', 'w');
-
-            fputcsv($output, ['Jira ID', 'Summary', 'Hours', 'Comment', 'Date', 'User']);
-
-            // Rows
-            foreach ($logs as $log) {
-                fputcsv($output, [
-                    $log['key'],
-                    $log['summary'],
-                    $log['hours'],
-                    $log['comment'],
-                    $log['date'],
-                    $log['user']
-                ]);
-            }
-
-            fclose($output);
-            exit;
-        }
+        $total_sp = $data['total_story_points'] ?? 0;
     }
 }
 ?>
@@ -262,6 +239,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <thead>
         <tr>
             <th>Jira ID</th>
+            <th>SP</th>
             <th>Summary</th>
             <th>Hours</th>
             <th>Comment</th>
@@ -277,6 +255,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <?= $log['key'] ?>
                 </a>
             </td>
+            <td><?= $log['story_points'] ?></td>
             <td><?= $log['summary'] ?></td>
             <td><?= $log['hours'] ?>h</td>
             <td><?= $log['comment'] ?></td>
@@ -288,6 +267,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </table>
 
 <h3>Total: <span id="totalHours"><?= $total ?></span>h</h3>
+<h3>Total Story Points: <span id="totalstp"><?= $total_sp ?></span></h3>
 
 <?php else : ?>
 <table> <thead>
@@ -304,13 +284,13 @@ $(document).ready(function () {
     if ($('#worklogTable').length) {
         function recalculateTotal(table) {
             let total = 0;
-
+            
             // Only visible (filtered) rows
             table.rows({ search: 'applied' }).every(function () {
                 const data = this.data();
 
                 // Column index 2 = Hours (e.g. "1.5h")
-                let hours = data[2];
+                let hours = data[3];
 
                 if (!hours) return;
 
@@ -326,7 +306,17 @@ $(document).ready(function () {
         const table = $('#worklogTable').DataTable({
             pageLength: 25,
             order: [[4, 'desc']],
+             autoWidth: false, // ✅ IMPORTANT
 
+            columnDefs: [
+                { width: "5%", targets: 0 }, 
+                { width: "2%", targets: 1 }, 
+                { width: "20%", targets: 2 },
+                { width: "2%", targets: 3 }, 
+                { width: "20%", targets: 4 },
+                { width: "5%", targets: 5 }, 
+                { width: "5%", targets: 6 }  
+            ],
             dom: 'Bfrtip',
 
             buttons: [

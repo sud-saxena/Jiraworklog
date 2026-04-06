@@ -114,7 +114,7 @@ function getWorklogs($from, $to, $accountIds = []) {
         $data = jiraPostRequest($searchUrl, [
             "jql" => $jql,
             "maxResults" => 50,
-            "fields" => ["summary"]
+            "fields" => ["summary", "customfield_10004"]
         ]);
 
         if (!isset($data['issues']) || !is_array($data['issues'])) {
@@ -124,14 +124,19 @@ function getWorklogs($from, $to, $accountIds = []) {
                 'error' => 'Invalid Jira response'
             ];
         }
-
+        $uniqueStoryPoints = [];
         foreach ($data['issues'] as $issue) {
 
             $key = $issue['key'] ?? null;
+            
             if (!$key) continue;
 
             $summary = $issue['fields']['summary'] ?? 'No summary';
-
+            $storyPoints = $issue['fields']['customfield_10004'] ?? 0;
+            if ($storyPoints === null) {
+                $storyPoints = 0;
+            }
+            $uniqueStoryPoints[$key] = $storyPoints;
             $worklogsUrl = "$base/rest/api/3/issue/$key/worklog";
             $worklogsData = jiraGetRequest($worklogsUrl);
 
@@ -172,6 +177,7 @@ function getWorklogs($from, $to, $accountIds = []) {
                     'date' => date('Y-m-d', $started),
                     'user' => $log['author']['displayName'] ?? '',
                     'hours' => round($seconds / 3600, 2),
+                    'story_points' => $storyPoints,
                     'comment' => trim($comment) ?: '-'
                 ];
             }
@@ -179,8 +185,10 @@ function getWorklogs($from, $to, $accountIds = []) {
 
         $final = [
             'logs' => $results,
-            'total' => round($totalSeconds / 3600, 2)
+            'total' => round($totalSeconds / 3600, 2),
+            'total_story_points' => array_sum($uniqueStoryPoints)
         ];
+
 
         cache($cacheKey, $final, 300);
 
